@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Control de Riesgo — Sesión de Trading</title>
+<style>
+  @font-face {
+    font-family: 'system-mono';
+    src: local('JetBrains Mono'), local('SF Mono'), local('Consolas');
+  }
+
+  :root {
+    --bg-0: #0A0E14;
+    --bg-1: #10151D;
+    --bg-2: #161D27;
+    --bg-3: #1D2531;
+    --line: #242E3C;
+    --line-soft: #1A222E;
+    --text-hi: #EDF1F7;
+    --text-mid: #8B97A8;
+    --text-low: #5A6678;
+    --green: #34D399;
+    --green-dim: #1C4A3C;
+    --green-bg: #0F2A22;
+    --red: #F87171;
+    --red-dim: #4A2424;
+    --red-bg: #2A1414;
+    --amber: #FBBF24;
+    --amber-bg: #2A2210;
+    --mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg-0);
+    color: var(--text-hi);
+    font-family: var(--sans);
+    width: 100%;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #app {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 16px 16px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ===== Header bar ===== */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 2px 6px;
+  }
+  .topbar .brand {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--text-low);
+    text-transform: uppercase;
+  }
+  .session-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--text-mid);
+    letter-spacing: 0.04em;
+  }
+  .session-badge.live { color: var(--green); border-color: var(--green-dim); }
+  .session-badge.stopped { color: var(--red); border-color: var(--red-dim); }
+
+  /* ===== Status panel ===== */
+  .status-panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 18px 16px;
+  }
+
+  .pnl-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .pnl-label {
+    font-size: 12px;
+    color: var(--text-low);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+  .pnl-value {
+    font-family: var(--mono);
+    font-size: 44px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    transition: color 0.15s ease;
+  }
+  .pnl-value.pos { color: var(--green); }
+  .pnl-value.neg { color: var(--red); }
+  .pnl-value.zero { color: var(--text-hi); }
+
+  .pnl-pct {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-mid);
+    text-align: right;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line-soft);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--line-soft);
+  }
+  .stat-cell {
+    background: var(--bg-2);
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .stat-cell .k {
+    font-size: 10px;
+    color: var(--text-low);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 5px;
+  }
+  .stat-cell .v {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-hi);
+  }
+  .stat-cell .v.streak-win { color: var(--green); }
+  .stat-cell .v.streak-loss { color: var(--red); }
+
+  /* ===== Progress bar (signature element) ===== */
+  .gauge-wrap {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px 14px;
+  }
+  .gauge-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-low);
+    margin-bottom: 8px;
+  }
+  .gauge-labels .lbl-stop { color: var(--red); opacity: 0.85; }
+  .gauge-labels .lbl-goal { color: var(--green); opacity: 0.85; }
+
+  .gauge-track {
+    position: relative;
+    height: 10px;
+    background: linear-gradient(to right, var(--red-bg) 0%, var(--bg-3) 50%, var(--green-bg) 100%);
+    border-radius: 5px;
+    overflow: visible;
+    border: 1px solid var(--line);
+  }
+  .gauge-zero-tick {
+    position: absolute;
+    left: 50%;
+    top: -4px;
+    bottom: -4px;
+    width: 1px;
+    background: var(--line);
+  }
+  .gauge-fill {
+    position: absolute;
+    top: 0; bottom: 0;
+    border-radius: 5px;
+    transition: left 0.25s ease, right 0.25s ease, background 0.25s ease;
+  }
+  .gauge-needle {
+    position: absolute;
+    top: -5px;
+    width: 3px;
+    height: 20px;
+    border-radius: 2px;
+    background: var(--text-hi);
+    box-shadow: 0 0 0 2px var(--bg-1);
+    transition: left 0.25s ease;
+    transform: translateX(-50%);
+  }
+  .gauge-needle.pos { background: var(--green); }
+  .gauge-needle.neg { background: var(--red); }
+
+  .gauge-foot {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 9px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-low);
+  }
+  .gauge-foot .current {
+    color: var(--text-hi);
+    font-weight: 600;
+  }
+
+  /* ===== Action buttons ===== */
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .btn-action {
+    border: none;
+    border-radius: 12px;
+    padding: 20px 12px;
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: transform 0.08s ease, filter 0.12s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: var(--bg-0);
+  }
+  .btn-action:active { transform: scale(0.97); }
+  .btn-action:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  .btn-action .sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.75;
+  }
+  .btn-win { background: var(--green); }
+  .btn-win:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn-loss { background: var(--red); }
+  .btn-loss:hover:not(:disabled) { filter: brightness(1.08); }
+
+  .btn-undo {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text-mid);
+    border-radius: 8px;
+    padding: 9px;
+    font-family: var(--sans);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-undo:hover:not(:disabled) { border-color: var(--text-mid); color: var(--text-hi); }
+  .btn-undo:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ===== Recommended risk panel ===== */
+  .risk-panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .risk-panel.flash {
+    animation: riskFlash 0.5s ease;
+  }
+  @keyframes riskFlash {
+    0% { border-color: var(--text-mid); }
+    100% { border-color: var(--line); }
+  }
+  .risk-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .risk-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-low);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .risk-title .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .level-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+  }
+  .level-badge.conservador { background: var(--amber-bg); color: var(--amber); }
+  .level-badge.normal { background: var(--green-bg); color: var(--green); }
+  .level-badge.agresivo { background: var(--red-bg); color: var(--red); }
+  .level-badge.none { background: var(--bg-3); color: var(--text-low); }
+
+  .risk-main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .risk-main .risk-cell {
+    background: var(--bg-2);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .risk-main .risk-cell .k {
+    font-size: 11px;
+    color: var(--text-low);
+    margin-bottom: 5px;
+  }
+  .risk-main .risk-cell .v {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-hi);
+    line-height: 1.1;
+  }
+  .risk-main .risk-cell.suggested .v { color: var(--amber); }
+  .risk-main .risk-cell.gain .v { color: var(--green); }
+
+  .risk-reason {
+    font-size: 13px;
+    color: var(--text-mid);
+    line-height: 1.45;
+    padding: 10px 12px;
+    background: var(--bg-2);
+    border-radius: 8px;
+    border-left: 3px solid var(--text-low);
+  }
+  .risk-reason.conservador-border { border-left-color: var(--amber); }
+  .risk-reason.normal-border { border-left-color: var(--green); }
+  .risk-reason.stop-border { border-left-color: var(--red); }
+
+  .risk-stop-banner {
+    text-align: center;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    background: var(--red-bg);
+    color: var(--red);
+  }
+
+  /* ===== Next decision panel ===== */
+  .decision-panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .decision-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-low);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .decision-title .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .decision-title .dot.warn { background: var(--amber); }
+  .decision-title .dot.stop { background: var(--red); }
+
+  .decision-banner {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+  .decision-banner.ok { background: var(--green-bg); color: var(--green); }
+  .decision-banner.warn { background: var(--amber-bg); color: var(--amber); }
+  .decision-banner.stop { background: var(--red-bg); color: var(--red); }
+
+  .decision-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .decision-item {
+    background: var(--bg-2);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .decision-item .k {
+    font-size: 11px;
+    color: var(--text-low);
+    margin-bottom: 5px;
+    line-height: 1.3;
+  }
+  .decision-item .v {
+    font-family: var(--mono);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--text-hi);
+  }
+  .decision-item .v.accent { color: var(--green); }
+  .decision-item .v.danger { color: var(--red); }
+
+  /* ===== History ===== */
+  .history-panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 18px 6px;
+  }
+  .history-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-low);
+    margin-bottom: 10px;
+  }
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 230px;
+    overflow-y: auto;
+  }
+  .history-row {
+    display: grid;
+    grid-template-columns: 36px 1fr 80px 110px;
+    align-items: center;
+    padding: 9px 4px;
+    border-top: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .history-row:first-child { border-top: none; }
+  .history-row .n { color: var(--text-low); }
+  .history-row .result-tag {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    width: fit-content;
+    letter-spacing: 0.03em;
+  }
+  .result-tag.win { background: var(--green-bg); color: var(--green); }
+  .result-tag.loss { background: var(--red-bg); color: var(--red); }
+  .history-row .delta { text-align: right; color: var(--text-mid); }
+  .history-row .bal { text-align: right; font-weight: 600; }
+  .history-row .bal.pos { color: var(--green); }
+  .history-row .bal.neg { color: var(--red); }
+  .history-empty {
+    color: var(--text-low);
+    font-size: 13px;
+    padding: 18px 4px 22px;
+    text-align: center;
+  }
+
+  /* ===== Settings ===== */
+  .settings-panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .settings-header .title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-low);
+  }
+  .settings-header .chev {
+    color: var(--text-low);
+    font-family: var(--mono);
+    font-size: 13px;
+    transition: transform 0.2s ease;
+  }
+  .settings-header .chev.open { transform: rotate(180deg); }
+
+  .settings-body {
+    padding: 0 18px 18px;
+    display: none;
+  }
+  .settings-body.open { display: block; }
+
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .field label {
+    font-size: 11px;
+    color: var(--text-mid);
+  }
+  .field input {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 9px 10px;
+    color: var(--text-hi);
+    font-family: var(--mono);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus { border-color: var(--text-mid); }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-top: 1px solid var(--line-soft);
+  }
+  .toggle-row .label {
+    font-size: 13px;
+    color: var(--text-hi);
+  }
+  .toggle-row .desc {
+    font-size: 11px;
+    color: var(--text-low);
+    margin-top: 2px;
+  }
+  .switch {
+    position: relative;
+    width: 38px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .switch .slider::before {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    left: 2px; top: 2px;
+    background: var(--text-mid);
+    border-radius: 50%;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .switch input:checked + .slider { background: var(--green-dim); border-color: var(--green); }
+  .switch input:checked + .slider::before { transform: translateX(16px); background: var(--green); }
+
+  .settings-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .btn-secondary {
+    flex: 1;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--text-hi);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .btn-secondary:hover { border-color: var(--text-mid); }
+  .btn-secondary.danger { color: var(--red); }
+  .btn-secondary.danger:hover { border-color: var(--red-dim); }
+
+  /* ===== Session over overlay ===== */
+  .session-over-banner {
+    text-align: center;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: -4px;
+  }
+  .session-over-banner.goal { background: var(--green-bg); color: var(--green); }
+  .session-over-banner.stop { background: var(--red-bg); color: var(--red); }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+  @media (max-width: 420px) {
+    .pnl-value { font-size: 36px; }
+    .stat-cell .v { font-size: 14px; }
+    .decision-grid { grid-template-columns: 1fr 1fr; }
+    .history-row { grid-template-columns: 28px 1fr 64px 90px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'risk_session_v1';
+
+  var defaultConfig = {
+    dailyGoal: 60000,
+    dailyStop: 60000,
+    riskPerTrade: 25000,
+    minPayout: 80,
+    autoStopOnGoal: true,
+    autoStopOnStop: true,
+    dynamicRiskEnabled: true
+  };
+
+  var state = {
+    config: Object.assign({}, defaultConfig),
+    trades: [], // {n, result: 'win'|'loss', delta, balance}
+    balance: 0,
+    sessionEnded: false,
+    endReason: null // 'goal' | 'stop'
+  };
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        state.config = Object.assign({}, defaultConfig, parsed.config || {});
+        state.trades = parsed.trades || [];
+        state.balance = parsed.balance || 0;
+        state.sessionEnded = parsed.sessionEnded || false;
+        state.endReason = parsed.endReason || null;
+      }
+    } catch (e) {}
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }
+
+  function fmt(n) {
+    var sign = n < 0 ? '-' : (n > 0 ? '+' : '');
+    var abs = Math.abs(Math.round(n));
+    return sign + abs.toLocaleString('es-ES');
+  }
+  function fmtPlain(n) {
+    return Math.round(n).toLocaleString('es-ES');
+  }
+
+  function clampGaugePct(balance, stop, goal) {
+    var range = stop + goal;
+    if (range <= 0) return 50;
+    var pct = ((balance + stop) / range) * 100;
+    return Math.max(0, Math.min(100, pct));
+  }
+
+  function streakInfo() {
+    if (state.trades.length === 0) return { type: 'none', count: 0 };
+    var last = state.trades[state.trades.length - 1].result;
+    var count = 0;
+    for (var i = state.trades.length - 1; i >= 0; i--) {
+      if (state.trades[i].result === last) count++;
+      else break;
+    }
+    return { type: last, count: count };
+  }
+
+  // ===== MOTOR DE RIESGO DINÁMICO =====
+  // Regla: se usa siempre el riesgo configurado (ej. 25.000), EXCEPTO en dos
+  // situaciones, simétricas entre sí:
+  //   - Cerca del STOP: si el margen restante antes del stop es menor al riesgo
+  //     configurado, se arriesga exactamente ese margen — una pérdida deja el
+  //     balance justo en el stop, nunca por debajo.
+  //   - Cerca de la META: si la ganancia que daría el riesgo configurado supera
+  //     lo que falta para la meta, se arriesga exactamente lo necesario para que
+  //     una ganadora deje el balance justo en la meta, nunca por encima.
+  // En cualquier otro caso (incluida cualquier racha), se vuelve siempre a 25.000.
+  // Como el cálculo se hace desde cero en cada operación a partir del balance
+  // actual, el patrón de 25.000 se retoma solo en cuanto el margen se abre de nuevo.
+  function computeRiskRecommendation() {
+    var cfg = state.config;
+    var bal = state.balance;
+    var goal = cfg.dailyGoal;
+    var stop = cfg.dailyStop;
+    var baseRisk = cfg.riskPerTrade;
+    var payout = cfg.minPayout / 100;
+
+    var distToGoal = goal - bal;   // falta para la meta (negativo = ya superada)
+    var distToStop = stop + bal;   // margen restante antes del stop (negativo = ya superado)
+
+    if (distToGoal <= 0) {
+      return { risk: 0, action: 'goal_reached', reason: 'Meta diaria ya alcanzada o superada. No se recomienda abrir más operaciones.', level: 'none' };
+    }
+    if (distToStop <= 0) {
+      return { risk: 0, action: 'stop_reached', reason: 'Stop diario ya alcanzado. No se recomienda abrir más operaciones.', level: 'none' };
+    }
+
+    // Si el motor dinámico está desactivado, se usa siempre el riesgo fijo,
+    // sin ningún ajuste, ni cerca del stop ni cerca de la meta.
+    if (cfg.dynamicRiskEnabled === false) {
+      return {
+        risk: baseRisk,
+        potentialGain: Math.round(baseRisk * payout),
+        reason: 'Motor dinámico desactivado. Se usa siempre el riesgo fijo configurado.',
+        level: 'Normal',
+        action: 'operate'
+      };
+    }
+
+    // Riesgo máximo que respeta el stop: exactamente el margen restante.
+    var riskByStop = distToStop;
+    // Riesgo máximo que respeta la meta: el que produce una ganancia igual a
+    // lo que falta (riesgo * payout = distToGoal  =>  riesgo = distToGoal / payout).
+    var riskByGoal = payout > 0 ? (distToGoal / payout) : baseRisk;
+
+    var finalRisk = Math.min(baseRisk, riskByStop, riskByGoal);
+    finalRisk = Math.max(0, Math.round(finalRisk / 100) * 100);
+
+    var minOperativeRisk = Math.max(500, baseRisk * 0.05);
+    if (finalRisk < minOperativeRisk) {
+      return {
+        risk: 0,
+        action: 'suggest_stop',
+        reason: 'El margen restante (' + fmtPlain(distToStop) + ') es muy pequeño para operar con seguridad. Se recomienda finalizar la sesión.',
+        level: 'none'
+      };
+    }
+
+    var limitedByStop = finalRisk < baseRisk && riskByStop <= riskByGoal;
+    var limitedByGoal = finalRisk < baseRisk && riskByGoal < riskByStop;
+
+    var level = (limitedByStop || limitedByGoal) ? 'Conservador' : 'Normal';
+    var reason;
+    if (limitedByStop) {
+      reason = 'Quedan solo ' + fmtPlain(distToStop) + ' antes del stop diario. Riesgo ajustado a ese margen exacto para no superarlo.';
+    } else if (limitedByGoal) {
+      reason = 'Faltan ' + fmtPlain(distToGoal) + ' para la meta. Riesgo ajustado para llegar justo a la meta sin excederla.';
+    } else {
+      reason = 'Dentro de margen seguro respecto al stop y a la meta. Se aplica el riesgo configurado.';
+    }
+
+    return {
+      risk: finalRisk,
+      potentialGain: Math.round(finalRisk * payout),
+      reason: reason,
+      level: level,
+      action: 'operate'
+    };
+  }
+
+  function registerTrade(result) {
+    if (state.sessionEnded) return;
+    var cfg = state.config;
+    var rec = computeRiskRecommendation();
+    // El tamaño de la operación es el riesgo recomendado dinámicamente por el motor.
+    // Si el motor indica que no hay riesgo operable (margen agotado), no se registra nada.
+    var appliedRisk = rec.risk > 0 ? rec.risk : cfg.riskPerTrade;
+    var delta;
+    if (result === 'win') {
+      delta = appliedRisk * (cfg.minPayout / 100);
+    } else {
+      delta = -appliedRisk;
+    }
+    var newBalance = state.balance + delta;
+    state.trades.push({
+      n: state.trades.length + 1,
+      result: result,
+      delta: delta,
+      balance: newBalance,
+      riskUsed: appliedRisk
+    });
+    state.balance = newBalance;
+
+    if (cfg.autoStopOnGoal && state.balance >= cfg.dailyGoal) {
+      state.sessionEnded = true;
+      state.endReason = 'goal';
+    } else if (cfg.autoStopOnStop && state.balance <= -cfg.dailyStop) {
+      state.sessionEnded = true;
+      state.endReason = 'stop';
+    }
+    save();
+    render();
+  }
+
+  function undoLast() {
+    if (state.trades.length === 0) return;
+    state.trades.pop();
+    state.balance = state.trades.length ? state.trades[state.trades.length - 1].balance : 0;
+    state.sessionEnded = false;
+    state.endReason = null;
+    save();
+    render();
+  }
+
+  function resetSession() {
+    state.trades = [];
+    state.balance = 0;
+    state.sessionEnded = false;
+    state.endReason = null;
+    save();
+    render();
+  }
+
+  var settingsOpen = false;
+
+  function applySettings(formEl) {
+    var goal = parseFloat(formEl.querySelector('[name=dailyGoal]').value) || 0;
+    var stop = parseFloat(formEl.querySelector('[name=dailyStop]').value) || 0;
+    var risk = parseFloat(formEl.querySelector('[name=riskPerTrade]').value) || 0;
+    var payout = parseFloat(formEl.querySelector('[name=minPayout]').value) || 0;
+    var autoGoal = formEl.querySelector('[name=autoStopOnGoal]').checked;
+    var autoStop = formEl.querySelector('[name=autoStopOnStop]').checked;
+    var dynamicRisk = formEl.querySelector('[name=dynamicRiskEnabled]').checked;
+
+    state.config = {
+      dailyGoal: Math.abs(goal),
+      dailyStop: Math.abs(stop),
+      riskPerTrade: Math.abs(risk),
+      minPayout: payout,
+      autoStopOnGoal: autoGoal,
+      autoStopOnStop: autoStop,
+      dynamicRiskEnabled: dynamicRisk
+    };
+    save();
+    render();
+  }
+
+  function render() {
+    var cfg = state.config;
+    var bal = state.balance;
+    var goal = cfg.dailyGoal;
+    var stop = cfg.dailyStop;
+    var streak = streakInfo();
+    var rec = computeRiskRecommendation();
+
+    var remainingToGoal = Math.max(0, goal - bal);
+    var remainingToStop = Math.max(0, stop + bal); // bal negativo reduce el margen
+    // "Ganadoras para meta" y "pérdidas que soporta" ahora se calculan usando el
+    // riesgo DINÁMICO recomendado (no el riesgo fijo), porque ese es el tamaño
+    // real que el sistema sugiere usar en cada operación siguiente.
+    var dynRiskForCount = rec.risk > 0 ? rec.risk : cfg.riskPerTrade;
+    var dynGainForCount = rec.potentialGain > 0 ? rec.potentialGain : (dynRiskForCount * cfg.minPayout / 100);
+    var winsNeeded = dynGainForCount > 0 ? Math.ceil(remainingToGoal / dynGainForCount) : 0;
+    var lossesAllowed = dynRiskForCount > 0 ? Math.floor(remainingToStop / dynRiskForCount) : 0;
+
+    var gaugePct = clampGaugePct(bal, stop, goal);
+
+    var pnlClass = bal > 0 ? 'pos' : (bal < 0 ? 'neg' : 'zero');
+    var pnlPct = goal > 0 ? ((bal / goal) * 100) : 0;
+
+    // ---- decision banner logic ----
+    var bannerClass = 'ok';
+    var bannerText = '';
+    var dotClass = '';
+
+    if (state.sessionEnded) {
+      bannerClass = state.endReason === 'goal' ? 'ok' : 'stop';
+      bannerText = state.endReason === 'goal'
+        ? '✓ Meta diaria alcanzada. Sesión finalizada — no abras más operaciones hoy.'
+        : '⛔ Stop diario alcanzado. Sesión finalizada — no abras más operaciones hoy.';
+      dotClass = state.endReason === 'goal' ? '' : 'stop';
+    } else if (rec.action === 'suggest_stop' || rec.action === 'stop_reached' || rec.action === 'goal_reached') {
+      bannerClass = 'stop';
+      dotClass = 'stop';
+      bannerText = '⚠ ' + rec.reason;
+    } else if (lossesAllowed <= 1) {
+      bannerClass = 'stop';
+      dotClass = 'stop';
+      bannerText = '⚠ Estás a 1 pérdida del stop diario. Opera solo si tienes alta convicción.';
+    } else if (lossesAllowed <= 2) {
+      bannerClass = 'warn';
+      dotClass = 'warn';
+      bannerText = '⚠ Margen ajustado: solo ' + lossesAllowed + ' pérdidas más antes del stop.';
+    } else if (bal >= goal * 0.8) {
+      bannerClass = 'ok';
+      bannerText = '🎯 Estás cerca de la meta. ' + winsNeeded + ' operación(es) ganadora(s) más al riesgo recomendado y la alcanzas.';
+    } else {
+      bannerClass = 'ok';
+      bannerText = 'Dentro de parámetros. Sigue la recomendación de riesgo de la sección siguiente.';
+    }
+
+    var html = '';
+
+    // Top bar
+    html += '<div class="topbar">';
+    html += '<div class="brand">CONTROL DE RIESGO · SESIÓN</div>';
+    html += '<div class="session-badge ' + (state.sessionEnded ? 'stopped' : 'live') + '">' +
+            (state.sessionEnded ? '● SESIÓN FINALIZADA' : '● EN VIVO') + '</div>';
+    html += '</div>';
+
+    // Status panel
+    html += '<div class="status-panel">';
+    html += '  <div class="pnl-row">';
+    html += '    <div>';
+    html += '      <div class="pnl-label">Ganancia / Pérdida actual</div>';
+    html += '      <div class="pnl-value ' + pnlClass + '">' + fmt(bal) + '</div>';
+    html += '    </div>';
+    html += '    <div class="pnl-pct">' + (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(0) + '% de la meta</div>';
+    html += '  </div>';
+    html += '  <div class="stat-grid">';
+    html += '    <div class="stat-cell"><div class="k">Meta diaria</div><div class="v">' + fmtPlain(goal) + '</div></div>';
+    html += '    <div class="stat-cell"><div class="k">Stop diario</div><div class="v">-' + fmtPlain(stop) + '</div></div>';
+    html += '    <div class="stat-cell"><div class="k">Operaciones</div><div class="v">' + state.trades.length + '</div></div>';
+    html += '    <div class="stat-cell"><div class="k">Racha actual</div><div class="v ' +
+              (streak.type === 'win' ? 'streak-win' : streak.type === 'loss' ? 'streak-loss' : '') + '">' +
+              (streak.type === 'none' ? '—' : (streak.count + (streak.type === 'win' ? ' G' : ' P'))) +
+            '</div></div>';
+    html += '  </div>';
+    html += '</div>';
+
+    // Gauge
+    var fillLeft, fillWidth, fillColor;
+    if (bal >= 0) {
+      fillLeft = 50; fillWidth = Math.max(0, gaugePct - 50); fillColor = 'var(--green)';
+    } else {
+      fillLeft = gaugePct; fillWidth = Math.max(0, 50 - gaugePct); fillColor = 'var(--red)';
+    }
+    html += '<div class="gauge-wrap">';
+    html += '  <div class="gauge-labels"><span class="lbl-stop">-' + fmtPlain(stop) + '</span><span>0</span><span class="lbl-goal">+' + fmtPlain(goal) + '</span></div>';
+    html += '  <div class="gauge-track">';
+    html += '    <div class="gauge-zero-tick"></div>';
+    html += '    <div class="gauge-fill" style="left:' + fillLeft + '%; width:' + fillWidth + '%; background:' + fillColor + ';"></div>';
+    html += '    <div class="gauge-needle ' + pnlClass + '" style="left:' + gaugePct + '%;"></div>';
+    html += '  </div>';
+    html += '  <div class="gauge-foot"><span>Posición actual: <span class="current">' + fmt(bal) + '</span></span><span>' + gaugePct.toFixed(0) + '% del rango</span></div>';
+    html += '</div>';
+
+    // Action buttons — el monto mostrado y aplicado es el riesgo DINÁMICO recomendado,
+    // no el riesgo fijo configurado. cfg.riskPerTrade ahora es solo el techo máximo.
+    var btnRisk = rec.risk > 0 ? rec.risk : cfg.riskPerTrade;
+    var btnGain = rec.potentialGain > 0 ? rec.potentialGain : (btnRisk * cfg.minPayout / 100);
+    var actionsDisabled = state.sessionEnded || rec.action === 'stop_reached' || rec.action === 'goal_reached' || rec.action === 'suggest_stop';
+
+    html += '<div class="actions">';
+    html += '  <button class="btn-action btn-win" id="btnWin" ' + (actionsDisabled ? 'disabled' : '') + '>';
+    html += '    OPERACIÓN GANADA<span class="sub">+' + fmtPlain(btnGain) + '</span>';
+    html += '  </button>';
+    html += '  <button class="btn-action btn-loss" id="btnLoss" ' + (actionsDisabled ? 'disabled' : '') + '>';
+    html += '    OPERACIÓN PERDIDA<span class="sub">-' + fmtPlain(btnRisk) + '</span>';
+    html += '  </button>';
+    html += '</div>';
+    html += '<button class="btn-undo" id="btnUndo" ' + (state.trades.length === 0 ? 'disabled' : '') + '>↺ Deshacer última operación</button>';
+
+    // ===== RIESGO RECOMENDADO =====
+    var levelClass = rec.level === 'Conservador' ? 'conservador' : (rec.level === 'Normal' ? 'normal' : (rec.level === 'Agresivo' ? 'agresivo' : 'none'));
+    var reasonBorderClass = rec.level === 'Conservador' ? 'conservador-border' : (rec.level === 'Normal' ? 'normal-border' : '');
+
+    html += '<div class="risk-panel">';
+    html += '  <div class="risk-header">';
+    html += '    <div class="risk-title"><span class="dot ' + (rec.action !== 'operate' ? 'stop' : '') + '"></span>RIESGO RECOMENDADO</div>';
+    html += '    <div class="level-badge ' + levelClass + '">' + (rec.level === 'none' ? 'Finalizar' : rec.level) + '</div>';
+    html += '  </div>';
+
+    if (rec.action === 'operate') {
+      html += '  <div class="risk-main">';
+      html += '    <div class="risk-cell suggested"><div class="k">Riesgo sugerido</div><div class="v">' + fmtPlain(rec.risk) + '</div></div>';
+      html += '    <div class="risk-cell gain"><div class="k">Ganancia potencial</div><div class="v">+' + fmtPlain(rec.potentialGain) + '</div></div>';
+      html += '  </div>';
+      html += '  <div class="risk-reason ' + reasonBorderClass + '">' + rec.reason + '</div>';
+    } else {
+      html += '  <div class="risk-stop-banner">' + rec.reason + '</div>';
+    }
+    html += '</div>';
+
+    // Decision panel
+    html += '<div class="decision-panel">';
+    html += '  <div class="decision-title"><span class="dot ' + dotClass + '"></span>PRÓXIMA DECISIÓN</div>';
+    html += '  <div class="decision-banner ' + bannerClass + '">' + bannerText + '</div>';
+    html += '  <div class="decision-grid">';
+    html += '    <div class="decision-item"><div class="k">Falta para la meta</div><div class="v accent">' + fmtPlain(remainingToGoal) + '</div></div>';
+    html += '    <div class="decision-item"><div class="k">Margen antes del stop</div><div class="v danger">' + fmtPlain(remainingToStop) + '</div></div>';
+    html += '    <div class="decision-item"><div class="k">Ganadoras para meta (al riesgo actual)</div><div class="v">' + winsNeeded + '</div></div>';
+    html += '    <div class="decision-item"><div class="k">Pérdidas que soportas (al riesgo actual)</div><div class="v">' + lossesAllowed + '</div></div>';
+    html += '  </div>';
+    html += '</div>';
+
+    // History
+    html += '<div class="history-panel">';
+    html += '  <div class="history-title">HISTORIAL DE OPERACIONES</div>';
+    html += '  <div class="history-list">';
+    if (state.trades.length === 0) {
+      html += '<div class="history-empty">Aún no hay operaciones registradas.</div>';
+    } else {
+      for (var i = state.trades.length - 1; i >= 0; i--) {
+        var t = state.trades[i];
+        html += '<div class="history-row">';
+        html += '  <div class="n">#' + t.n + '</div>';
+        html += '  <div><span class="result-tag ' + (t.result === 'win' ? 'win' : 'loss') + '">' + (t.result === 'win' ? 'GANADA' : 'PERDIDA') + '</span><div style="font-size:10px;color:var(--text-low);margin-top:3px;">riesgo: ' + fmtPlain(t.riskUsed || Math.abs(t.delta)) + '</div></div>';
+        html += '  <div class="delta">' + fmt(t.delta) + '</div>';
+        html += '  <div class="bal ' + (t.balance >= 0 ? 'pos' : 'neg') + '">' + fmt(t.balance) + '</div>';
+        html += '</div>';
+      }
+    }
+    html += '  </div>';
+    html += '</div>';
+
+    // Settings
+    html += '<div class="settings-panel">';
+    html += '  <div class="settings-header" id="settingsToggle">';
+    html += '    <div class="title">CONFIGURACIÓN DE REGLAS</div>';
+    html += '    <div class="chev ' + (settingsOpen ? 'open' : '') + '">▾</div>';
+    html += '  </div>';
+    html += '  <div class="settings-body ' + (settingsOpen ? 'open' : '') + '" id="settingsForm">';
+    html += '    <div class="field-grid">';
+    html += '      <div class="field"><label>Objetivo diario</label><input type="number" name="dailyGoal" value="' + cfg.dailyGoal + '" min="0" step="1000"></div>';
+    html += '      <div class="field"><label>Stop diario (pérdida máx.)</label><input type="number" name="dailyStop" value="' + cfg.dailyStop + '" min="0" step="1000"></div>';
+    html += '      <div class="field"><label>Riesgo por operación</label><input type="number" name="riskPerTrade" value="' + cfg.riskPerTrade + '" min="0" step="500"></div>';
+    html += '      <div class="field"><label>Payout mínimo (%)</label><input type="number" name="minPayout" value="' + cfg.minPayout + '" min="0" max="100" step="1"></div>';
+    html += '    </div>';
+    html += '    <div style="font-size:11px;color:var(--text-low);margin:-6px 0 14px;line-height:1.4;">Se usa siempre este riesgo, salvo cerca del stop o de la meta: ahí se ajusta exactamente a lo que falta, para terminar la operación justo en el límite, sin pasarte. En cuanto el margen se abre de nuevo, vuelve automáticamente a este valor.</div>';
+
+    html += '    <div class="toggle-row">';
+    html += '      <div><div class="label">Ajuste automático cerca del stop y la meta</div><div class="desc">Reduce el riesgo solo cuando estás a menos del riesgo configurado de tocar el stop o la meta. Si lo apagas, se usa siempre el riesgo fijo.</div></div>';
+    html += '      <label class="switch"><input type="checkbox" name="dynamicRiskEnabled" ' + (cfg.dynamicRiskEnabled !== false ? 'checked' : '') + '><span class="slider"></span></label>';
+    html += '    </div>';
+
+    html += '    <div class="toggle-row">';
+    html += '      <div><div class="label">Finalizar sesión al alcanzar la meta</div><div class="desc">Bloquea nuevas operaciones automáticamente</div></div>';
+    html += '      <label class="switch"><input type="checkbox" name="autoStopOnGoal" ' + (cfg.autoStopOnGoal ? 'checked' : '') + '><span class="slider"></span></label>';
+    html += '    </div>';
+    html += '    <div class="toggle-row">';
+    html += '      <div><div class="label">Finalizar sesión al alcanzar el stop</div><div class="desc">Bloquea nuevas operaciones automáticamente</div></div>';
+    html += '      <label class="switch"><input type="checkbox" name="autoStopOnStop" ' + (cfg.autoStopOnStop ? 'checked' : '') + '><span class="slider"></span></label>';
+    html += '    </div>';
+
+    html += '    <div class="settings-actions">';
+    html += '      <button class="btn-secondary" id="btnSave">Guardar reglas</button>';
+    html += '      <button class="btn-secondary danger" id="btnReset">Reiniciar sesión</button>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '</div>';
+
+    document.getElementById('app').innerHTML = html;
+    bindEvents();
+  }
+
+  function bindEvents() {
+    var btnWin = document.getElementById('btnWin');
+    var btnLoss = document.getElementById('btnLoss');
+    var btnUndo = document.getElementById('btnUndo');
+    var settingsToggle = document.getElementById('settingsToggle');
+    var btnSave = document.getElementById('btnSave');
+    var btnReset = document.getElementById('btnReset');
+
+    if (btnWin) btnWin.addEventListener('click', function () { registerTrade('win'); });
+    if (btnLoss) btnLoss.addEventListener('click', function () { registerTrade('loss'); });
+    if (btnUndo) btnUndo.addEventListener('click', undoLast);
+
+    if (settingsToggle) settingsToggle.addEventListener('click', function () {
+      settingsOpen = !settingsOpen;
+      render();
+    });
+
+    if (btnSave) btnSave.addEventListener('click', function () {
+      applySettings(document.getElementById('settingsForm'));
+    });
+
+    if (btnReset) btnReset.addEventListener('click', function () {
+      if (confirm('¿Reiniciar la sesión actual? Se borrará el historial de operaciones de hoy.')) {
+        resetSession();
+      }
+    });
+  }
+
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
